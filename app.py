@@ -45,27 +45,42 @@ def call_gemini(prompt, api_key, temperature=0.2):
 
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/"
-        f"models/{MODEL}:generateContent?key={api_key}"
+        f"models/{MODEL}:generateContent"
     )
 
-    response = requests.post(
-        url,
-        json={
-            "contents": [
-                {"parts": [{"text": prompt}]}
-            ],
-            "generationConfig": {
-                "temperature": temperature
-            }
-        },
-        timeout=120
-    )
+    for attempt in range(5):
+        try:
+            response = requests.post(
+                url,
+                headers={"x-goog-api-key": api_key},
+                json={
+                    "contents": [
+                        {"parts": [{"text": prompt}]}
+                    ],
+                    "generationConfig": {
+                        "temperature": temperature
+                    }
+                },
+                timeout=120
+            )
 
-    response.raise_for_status()
+            if response.status_code in [429, 500, 502, 503, 504]:
+                if attempt < 4:
+                    time.sleep(2 ** (attempt + 1))
+                    continue
 
-    data = response.json()
+            response.raise_for_status()
 
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+        except requests.exceptions.RequestException:
+            if attempt < 4:
+                time.sleep(2 ** (attempt + 1))
+            else:
+                raise Exception(
+                    "Gemini API failed after 5 attempts. Please retry this episode."
+                )
 
 
 def parse_json(raw):
