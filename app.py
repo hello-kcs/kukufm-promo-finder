@@ -88,15 +88,14 @@ def to_seconds(timestamp):
     return int(minutes) * 60 + float(seconds)
 
 
-def get_timestamp_pairs(text):
+def get_all_timestamps(text):
 
-    pattern = (
-        r"(\d{2}:\d{2}(?:\.\d{1,2})?)"
-        r"\s*(?:-|–|—|to)\s*"
-        r"(\d{2}:\d{2}(?:\.\d{1,2})?)"
+    pattern = r"(?<!\d)(\d{2}:\d{2}(?:\.\d{1,2})?)(?!\d)"
+
+    return set(
+        round(to_seconds(t), 2)
+        for t in re.findall(pattern, text)
     )
-
-    return re.findall(pattern, text, flags=re.IGNORECASE)
 
 
 def get_episode_number(filename, text, fallback):
@@ -215,15 +214,7 @@ SCREENPLAY:
 
             data = parse_json(raw)
 
-            timestamp_pairs = get_timestamp_pairs(screenplay)
-
-            valid_starts = [
-                to_seconds(pair[0]) for pair in timestamp_pairs
-            ]
-
-            valid_ends = [
-                to_seconds(pair[1]) for pair in timestamp_pairs
-            ]
+            valid_timestamps = get_all_timestamps(screenplay)
 
             for clip in data.get("candidates", []):
 
@@ -234,15 +225,9 @@ SCREENPLAY:
                     to_seconds(end) - to_seconds(start)
                 )
 
-                start_match = any(
-                    abs(to_seconds(start) - t) <= 0.01
-                    for t in valid_starts
-                )
+                start_match = round(to_seconds(start), 2) in valid_timestamps
 
-                end_match = any(
-                    abs(to_seconds(end) - t) <= 0.01
-                    for t in valid_ends
-                )
+                end_match = round(to_seconds(end), 2) in valid_timestamps
 
                 all_candidates.append({
                     "episode": episode_no,
